@@ -7,56 +7,58 @@
 #include <QSlider>
 #include <QVector>
 #include <QPointF>
+#include <QTimer>
+#include <QPushButton>
 
 #include "ClickableVideoWidget.h"
 #include "VisualMap.h"
 
-// =========================
-// 資料結構
-// =========================
-struct DataPoint {
-    double time;
-    double x;
-    double y;
-};
+// 數據結構定義
+struct DataPoint { double time; double x; double y; };
+struct CalibrationPoint { QPoint videoPos; QPointF worldPos; };
 
-struct CalibrationPoint {
-    QPoint  videoPos;   // 影片像素
-    QPointF worldPos;   // 世界座標
-};
-
-class timeLine : public QMainWindow
-{
+class timeLine : public QMainWindow {
     Q_OBJECT
-
 public:
     explicit timeLine(QWidget *parent = nullptr);
 
 private slots:
-    void loadFile();
+    // 按鈕與播放邏輯
+    void togglePlayPause();      // 切換播放與暫停
+    void loadFile();            // 載入 CSV 與影片
+    void applyAutoZoom();       // 執行畫面縮放與中心對齊
+
+    // 播放器狀態同步
     void onPositionChanged(qint64 position);
-    void onDurationChanged(qint64 duration);
+    void onDurationChanged(qint64 duration); // 解決編譯錯誤的關鍵宣告
+
+    // 滑鼠與顯示邏輯
     void onVideoClicked(const QPoint &pos);
 
 private:
-    // 🎥 Media
+    // 多媒體核心
     QMediaPlayer *m_player;
     QAudioOutput *m_audioOutput;
     ClickableVideoWidget *m_videoWidget;
+    QWidget *m_videoContainer;   // QScrollArea 指標，用於裁切與置中控制
 
-    // 🗺️ Map
+    // UI 元件
     VisualMap *m_visualMap;
-
-    // ⏱️ Timeline
     QSlider *m_timeSlider;
-    bool m_isUserSeeking = false;
+    QPushButton *m_btnPlayPause; // 暫停/播放按鈕指標
 
-    // 📍 Calibration
+    // 數據儲存
+    QVector<DataPoint> m_dataPoints;
+    double m_startTime = 0;
+    double m_endTime = 0;
+
+    // 座標轉換與縮放參數
+    double m_currentScale = 0.6; // 縮放倍率 (與 cpp 同步)
+    QPoint m_videoOffset = QPoint(0, 0);
+
+    // 校正狀態
     bool m_isCalibrating = false;
     QVector<CalibrationPoint> m_calibrationPoints;
-
-    // 📊 Data
-    QVector<DataPoint> m_dataPoints;
 };
 
-#endif
+#endif // TIMELINE_H
