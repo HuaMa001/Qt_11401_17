@@ -26,14 +26,14 @@ private slots:
     // 按鈕與播放邏輯
     void togglePlayPause();      // 切換播放與暫停
     void loadFile();            // 載入 CSV 與影片
+    void loadCSV(const QString &csvFile );
     void applyAutoZoom();       // 執行畫面縮放與中心對齊
 
     // 播放器狀態同步
     void onPositionChanged(qint64 position);
     void onDurationChanged(qint64 duration); // 解決編譯錯誤的關鍵宣告
+    void loadFileAndCSV(); // 直接讀取影片和 CSV
 
-    // 滑鼠與顯示邏輯
-    void onVideoClicked(const QPoint &pos);
 
 private:
     // 多媒體核心
@@ -56,9 +56,12 @@ private:
     double m_currentScale = 0.6; // 縮放倍率 (與 cpp 同步)
     QPoint m_videoOffset = QPoint(0, 0);
 
-    // 校正狀態
-    bool m_isCalibrating = false;
     QVector<CalibrationPoint> m_calibrationPoints;
+
+    int m_camW = 0;
+    int m_camH = 0;
+
+
 };
 
 #endif // TIMELINE_H

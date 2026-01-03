@@ -3,7 +3,6 @@
 
 #include <QWidget>
 #include <QPainter>
-#include <QMouseEvent>
 
 class VisualMap : public QWidget {
     Q_OBJECT
@@ -24,29 +23,11 @@ public:
         update();
     }
 
-signals:
-    void mapClicked(double x, double y);
-
 protected:
+    // 點擊校正功能已移除
     void mousePressEvent(QMouseEvent *event) override {
-        int padding = 30;
-        int availableW = width() - 2 * padding;
-        int availableH = height() - 2 * padding;
-        int mapW = availableW;
-        int mapH = mapW * 1080 / 1920;
-        if (mapH > availableH) {
-            mapH = availableH;
-            mapW = mapH * 1920 / 1080;
-        }
-        QRect mapRect((width() - mapW) / 2, (height() - mapH) / 2, mapW, mapH);
-
-        if (mapRect.contains(event->pos())) {
-            double relX = event->pos().x() - mapRect.left();
-            double relY = event->pos().y() - mapRect.top();
-            double targetX = (relX / mapW) * 1920.0;
-            double targetY = (relY / mapH) * 1080.0;
-            emit mapClicked(targetX, targetY);
-        }
+        Q_UNUSED(event);
+        // 不做任何事
     }
 
     void paintEvent(QPaintEvent *) override {
@@ -62,14 +43,17 @@ protected:
         }
         QRect mapRect((width() - mapW) / 2, (height() - mapH) / 2, mapW, mapH);
 
+        // 背景與邊框
         painter.setBrush(QColor(245, 245, 245));
         painter.setPen(QPen(Qt::darkGray, 2));
         painter.drawRect(mapRect);
 
+        // 中心虛線
         painter.setPen(QPen(QColor(210, 210, 210), 1, Qt::DashLine));
         painter.drawLine(mapRect.center().x(), mapRect.top(), mapRect.center().x(), mapRect.bottom());
         painter.drawLine(mapRect.left(), mapRect.center().y(), mapRect.right(), mapRect.center().y());
 
+        // 畫紅色十字與圓點
         double normX = qBound(0.0, m_currX, 1920.0);
         double normY = qBound(0.0, m_currY, 1080.0);
         int drawX = mapRect.left() + (normX / 1920.0) * mapW;
@@ -81,8 +65,9 @@ protected:
         painter.setBrush(Qt::red);
         painter.drawEllipse(drawX - 4, drawY - 4, 8, 8);
 
+        // 提示文字
         painter.setPen(Qt::black);
-        painter.drawText(mapRect.left(), mapRect.top() - 10, "座標監控 - [暫停時點擊微調]");
+        painter.drawText(mapRect.left(), mapRect.top() - 10, "座標監控");
     }
 
 private:
