@@ -9,7 +9,7 @@
 #include <QPointF>
 #include <QTimer>
 #include <QPushButton>
-
+#include <QLabel>
 #include "ClickableVideoWidget.h"
 #include "VisualMap.h"
 
@@ -33,6 +33,7 @@ private slots:
     void onPositionChanged(qint64 position);
     void onDurationChanged(qint64 duration); // 解決編譯錯誤的關鍵宣告
     void loadFileAndCSV(); // 直接讀取影片和 CSV
+    void exportCorrectedVideo();
 
 
 private:
