@@ -21,12 +21,14 @@
 #include <opencv2/opencv.hpp>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QDir>
+#include <QDateTime>
 
 timeLine::timeLine(QWidget *parent)
     : QMainWindow(parent),
     m_currentScale(0.6)
 {
-    setWindowTitle("Pro Video Tracker - 自動裁切預覽系統");
+    setWindowTitle("自動裁切系統");
     resize(1100, 900);
 
     setStatusBar(new QStatusBar(this));
@@ -54,7 +56,7 @@ timeLine::timeLine(QWidget *parent)
     videoCard->setObjectName("Card");
     QVBoxLayout *videoLayout = new QVBoxLayout(videoCard);
 
-    QLabel *videoTitle = new QLabel("🎥 影像預覽 (已自動裁切)");
+    QLabel *videoTitle = new QLabel("影像預覽");
     videoTitle->setObjectName("Title");
     videoLayout->addWidget(videoTitle);
 
@@ -87,7 +89,7 @@ timeLine::timeLine(QWidget *parent)
     timeCard->setObjectName("Card");
     QVBoxLayout *timeLayout = new QVBoxLayout(timeCard);
     m_timeSlider = new QSlider(Qt::Horizontal);
-    timeLayout->addWidget(new QLabel("⏱️ 數據涵蓋時間軸", timeCard));
+    timeLayout->addWidget(new QLabel("時間軸", timeCard));
     timeLayout->addWidget(m_timeSlider);
     mainLayout->addWidget(timeCard);
 
@@ -100,15 +102,16 @@ timeLine::timeLine(QWidget *parent)
     controlCard->setObjectName("Card");
     QVBoxLayout *controlLayout = new QVBoxLayout(controlCard);
 
-    m_btnPlayPause = new QPushButton("⏸️ 暫停");
-    QPushButton *btnLoad = new QPushButton("📂 選取影片並追蹤");
-    QPushButton *btnLoadCSV = new QPushButton("📂 讀取影片和路徑檔"); // 新增按鈕
+     QPushButton *btnLoadCSV = new QPushButton("📂 讀取存檔"); // 新增按鈕
     QPushButton *btnExport = new QPushButton("💾 輸出校正影片");
-    controlLayout->addWidget(btnExport);
+    m_btnPlayPause = new QPushButton("⏸️ 暫停");
+    QPushButton *btnLoad = new QPushButton("🔍️ 追蹤");
 
+    controlLayout->addWidget(btnLoadCSV); // 加入布局
+    controlLayout->addWidget(btnExport);
     controlLayout->addWidget(m_btnPlayPause);
     controlLayout->addWidget(btnLoad);
-    controlLayout->addWidget(btnLoadCSV); // 加入布局
+
     controlLayout->addStretch();
 
     bottomLayout->addWidget(m_visualMap, 3);
@@ -119,7 +122,7 @@ timeLine::timeLine(QWidget *parent)
 
     // --- 連接信號槽 ---
     connect(btnLoad, &QPushButton::clicked, this, &timeLine::loadFile);
-    connect(btnLoadCSV, &QPushButton::clicked, this, &timeLine::loadFileAndCSV); // 新增槽
+    connect(btnLoadCSV, &QPushButton::clicked, this, &timeLine::loadFileAndCSV);
     connect(m_btnPlayPause, &QPushButton::clicked, this, &timeLine::togglePlayPause);
     connect(m_player, &QMediaPlayer::positionChanged, this, &timeLine::onPositionChanged);
     connect(m_player, &QMediaPlayer::durationChanged, this, &timeLine::onDurationChanged);
@@ -201,27 +204,47 @@ void timeLine::loadFile()
 
     // --- 8. Python 完成時 ---
     connect(proc, &QProcess::finished, this,
-            [=](int exitCode, QProcess::ExitStatus status)
+            [=](int, QProcess::ExitStatus status)
             {
                 progress->close();
                 progress->deleteLater();
-                qDebug() << "Process finished:" << exitCode << status;
 
                 if (status == QProcess::NormalExit && QFile::exists(csvPath)) {
-                    // --- 9. 讀 CSV ---
-                    loadCSV(csvPath);
 
-                    // --- 10. 自動播放影片 ---
+                    // ===== 建立 ./save/年月日-時間 =====
+                    QString timestamp = QDateTime::currentDateTime()
+                                            .toString("yyyyMMdd-HHmmss");
+
+                    QString saveRoot = QDir::currentPath() + "/save/" + timestamp;
+                    QDir().mkpath(saveRoot);
+
+                    m_saveFolder = saveRoot;
+
+                    // ===== 複製原影片 =====
+                    QString inputFile = m_player->source().toLocalFile();
+                    QFile::copy(inputFile,
+                                m_saveFolder + "/" + QFileInfo(inputFile).fileName());
+
+                    // ===== 複製 CSV =====
+                    QFile::copy(csvPath,
+                                m_saveFolder + "/tracking.csv");
+
+                    // ===== 原本播放流程 =====
+                    loadCSV(csvPath);
                     m_player->setPosition(m_startTime * 1000);
                     QTimer::singleShot(300, this, &timeLine::applyAutoZoom);
                     m_player->play();
                     m_btnPlayPause->setText("⏸️ 暫停");
+
                 } else {
                     qDebug() << "❌ Python crash 或 CSV 不存在";
                 }
 
                 proc->deleteLater();
             });
+
+
+
 
     // --- 11. 啟動 Python ---
     proc->start();
@@ -230,17 +253,19 @@ void timeLine::loadFile()
         progress->close();
         progress->deleteLater();
     }
+
+
 }
 void timeLine::loadFileAndCSV()
 {
     // 1. 選影片
     QString video = QFileDialog::getOpenFileName(
-        this, "選擇影片", "", "*.mp4 *.avi");
+        this, "選擇影片", "./save", "*.mp4 *.avi");
     if (video.isEmpty()) return;
 
     // 2. 選 CSV
     QString csvFile = QFileDialog::getOpenFileName(
-        this, "選擇 CSV", "", "*.csv");
+        this, "選擇 CSV", "./save", "*.csv");
     if (csvFile.isEmpty()) return;
 
     // 3. 設定影片來源
@@ -358,79 +383,86 @@ void timeLine::exportCorrectedVideo()
     }
 
     QString inputFile = m_player->source().toLocalFile();
-    QString saveFile = QFileDialog::getSaveFileName(this, "儲存校正影片", "", "*.avi"); // MJPEG 最好用 .avi
+    QString saveFile = QFileDialog::getSaveFileName(this, "儲存校正影片", "", "Video Files (*.mp4 *.avi)");
     if (saveFile.isEmpty()) return;
 
     cv::VideoCapture cap(inputFile.toStdString());
-    if (!cap.isOpened()) {
-        QMessageBox::critical(this, "錯誤", "無法開啟影片！");
-        return;
-    }
+    if (!cap.isOpened()) return;
 
-    int width  = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH));
-    int height = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
+    int outW = m_camW;  // 預覽視窗寬
+    int outH = m_camH;  // 預覽視窗高
     double fps = cap.get(cv::CAP_PROP_FPS);
+    int totalFrames = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_COUNT));
 
-    // 使用 MJPEG 編碼
-    int fourcc = cv::VideoWriter::fourcc('M','J','P','G');
-    cv::VideoWriter writer(saveFile.toStdString(), fourcc, fps, cv::Size(width, height));
-
+    cv::VideoWriter writer(saveFile.toStdString(),
+                           cv::VideoWriter::fourcc('m','p','4','v'),
+                           fps, cv::Size(outW, outH));
     if (!writer.isOpened()) {
-        QMessageBox::critical(this, "錯誤", "無法初始化影片輸出！");
+        QMessageBox::critical(this, "錯誤", "無法建立影片檔案！");
         return;
     }
+
+    QProgressDialog progress("導出中...", "取消", 0, totalFrames, this);
+    progress.setWindowModality(Qt::ApplicationModal);
+    progress.show();
 
     cv::Mat frame;
     int frameIdx = 0;
 
-    QProgressDialog progress("影片輸出中...", "取消", 0, static_cast<int>(cap.get(cv::CAP_PROP_FRAME_COUNT)), this);
-    progress.setWindowModality(Qt::ApplicationModal);
-    progress.show();
-
     while (cap.read(frame)) {
         if (progress.wasCanceled()) break;
 
-        // --- 找對應的 CSV 資料 ---
+        // --- 插值取得人物位置 ---
         double sec = frameIdx / fps;
         auto it = std::lower_bound(m_dataPoints.begin(), m_dataPoints.end(), sec,
                                    [](const DataPoint &d, double t){ return d.time < t; });
+        DataPoint pt;
+        if (it == m_dataPoints.begin()) pt = *it;
+        else if (it == m_dataPoints.end()) pt = m_dataPoints.back();
+        else {
+            auto prev = it - 1;
+            double alpha = (sec - prev->time) / (it->time - prev->time);
+            pt.x = prev->x + alpha * (it->x - prev->x);
+            pt.y = prev->y + alpha * (it->y - prev->y);
+        }
 
-        DataPoint pt = (it == m_dataPoints.end()) ? m_dataPoints.back() : *it;
+        // --- 計算裁切區域中心 ---
+        int x1 = static_cast<int>(pt.x - outW / 2.0);
+        int y1 = static_cast<int>(pt.y - outH / 2.0);
 
-        // --- 計算平移裁切矩形 ---
-        int camW = static_cast<int>(width * m_currentScale);   // 可以保留縮放比例
-        int camH = static_cast<int>(height * m_currentScale);
+        // --- 建立黑色畫布 ---
+        cv::Mat output(outH, outW, frame.type(), cv::Scalar(0, 0, 0));
 
-        // ✅ 用原始影片座標置中人物
-        int personX = static_cast<int>(pt.x);
-        int personY = static_cast<int>(pt.y);
+        // --- 將原影片貼到黑色畫布上 ---
+        for (int y = 0; y < outH; y++) {
+            int srcY = y1 + y;
+            if (srcY < 0 || srcY >= frame.rows) continue;
+            for (int x = 0; x < outW; x++) {
+                int srcX = x1 + x;
+                if (srcX < 0 || srcX >= frame.cols) continue;
+                output.at<cv::Vec3b>(y, x) = frame.at<cv::Vec3b>(srcY, srcX);
+            }
+        }
 
-        int x1 = personX - camW / 2;
-        int y1 = personY - camH / 2;
-
-        // clamp 到影片範圍
-        x1 = std::max(0, std::min(x1, width - camW));
-        y1 = std::max(0, std::min(y1, height - camH));
-
-        cv::Rect roi(x1, y1, camW, camH);
-        cv::Mat cropped = frame(roi);
-
-        // resize 回原始影片大小，保持影片尺寸不變
-        cv::Mat outFrame;
-        cv::resize(cropped, outFrame, cv::Size(width, height));
-
-        writer.write(outFrame);
+        writer.write(output);
 
         frameIdx++;
-        progress.setValue(frameIdx);
-        QApplication::processEvents();
+        if (frameIdx % 10 == 0) {
+            progress.setValue(frameIdx);
+            QApplication::processEvents();
+        }
     }
 
-    writer.release();
     cap.release();
+    writer.release();
 
-    QMessageBox::information(this, "完成", "影片校正完成！");
+    if (!progress.wasCanceled())
+        QMessageBox::information(this, "完成", "影片導出成功，中間人物置中，黑邊已允許。");
 }
+
+
+
+
 
 
 

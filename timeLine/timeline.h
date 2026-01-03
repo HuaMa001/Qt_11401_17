@@ -57,6 +57,7 @@ private:
     double m_currentScale = 0.6; // 縮放倍率 (與 cpp 同步)
     QPoint m_videoOffset = QPoint(0, 0);
 
+    QString m_saveFolder;
     QVector<CalibrationPoint> m_calibrationPoints;
 
     int m_camW = 0;
