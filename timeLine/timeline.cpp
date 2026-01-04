@@ -152,7 +152,6 @@ timeLine::timeLine(QWidget *parent)
     connect(btnLoadCSV, &QPushButton::clicked, this, &timeLine::loadFileAndCSV);
     connect(m_btnPlayPause, &QPushButton::clicked, this, &timeLine::togglePlayPause);
     connect(m_player, &QMediaPlayer::positionChanged, this, &timeLine::onPositionChanged);
-    connect(m_player, &QMediaPlayer::durationChanged, this, &timeLine::onDurationChanged);
     connect(m_timeSlider, &QSlider::sliderMoved, m_player, &QMediaPlayer::setPosition);
     connect(btnExport, &QPushButton::clicked, this, &timeLine::exportCorrectedVideo);
 }
@@ -503,10 +502,4 @@ void timeLine::applyManualAdjust()
     onPositionChanged(m_player->position());
 }
 
-// -------------------------
-// 時間軸總長度變動 (未使用)
-// -------------------------
-void timeLine::onDurationChanged(qint64 duration) {
-    Q_UNUSED(duration);
-}
 
