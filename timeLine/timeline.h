@@ -47,7 +47,6 @@ private slots:
     void applyAutoZoom();                    ///< 自動初始化縮放參數
     void applyManualAdjust();                ///< 手動縮放滑桿更新
     void onPositionChanged(qint64 position);///< 播放位置變動，同步 UI
-    void onDurationChanged(qint64 duration);///< 播放總長度變化
     void exportCorrectedVideo();             ///< 關鍵功能：輸出校正影片
 
 private:
